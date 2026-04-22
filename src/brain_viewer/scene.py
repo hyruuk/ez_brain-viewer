@@ -65,6 +65,12 @@ class SceneManager:
         except Exception:
             # Not all plotter backends support MSAA; safe to ignore.
             pass
+        # Order-independent transparency: avoids back faces of transparent meshes
+        # bleeding through the opaque ROIs inside.
+        try:
+            plotter.enable_depth_peeling(number_of_peels=6, occlusion_ratio=0.0)
+        except Exception:
+            pass
 
     # -- Template ------------------------------------------------------------
 
@@ -100,6 +106,13 @@ class SceneManager:
                 smooth_shading=True,
                 name="__template__",
             )
+            # Backface culling on the transparent shell: only the near-camera
+            # triangles are drawn, so the back side of the brain doesn't stack
+            # on top of the ROIs and clutter the interior.
+            try:
+                self._template_actor.prop.SetBackfaceCulling(True)
+            except Exception:
+                pass
         self._render()
 
     def set_template_visible(self, visible: bool) -> None:
@@ -257,10 +270,14 @@ class SceneManager:
             off.enable_anti_aliasing("msaa", multi_samples=8)
         except Exception:
             pass
+        try:
+            off.enable_depth_peeling(number_of_peels=6, occlusion_ratio=0.0)
+        except Exception:
+            pass
 
         if self._template_visible and self._template_id is not None:
             tpl = self.templates.get_template(self._template_id)
-            off.add_mesh(
+            tpl_actor = off.add_mesh(
                 tpl.mesh,
                 color=(0.85, 0.85, 0.90),
                 opacity=self._template_opacity,
@@ -268,6 +285,10 @@ class SceneManager:
                 specular_power=15,
                 smooth_shading=True,
             )
+            try:
+                tpl_actor.prop.SetBackfaceCulling(True)
+            except Exception:
+                pass
 
         # Scale font size with target width so labels stay legible at all sizes.
         font_px = max(14, int(round(28 * target_w / base_w)))
