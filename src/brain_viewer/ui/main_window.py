@@ -6,6 +6,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from pyvistaqt import QtInteractor
 
 from ..atlases import AtlasRegistry
+from ..icons import get_app_icon
 from ..meshing import MeshBuilder
 from ..scene import SceneManager
 from ..templates import TemplateRegistry
@@ -16,6 +17,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("brain_viewer")
+        self.setWindowIcon(get_app_icon())
         self.resize(1400, 900)
 
         # 3D viewer as central widget.
