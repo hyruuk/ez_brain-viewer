@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "brain_viewer"
+version = "0.1.0"
+description = "Figure-ready 3D brain viewer — transparent templates with colored region solids, exportable as high-DPI PNG."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yann Harel" }]
+dependencies = [
+    "numpy>=1.24",
+    "nibabel>=5.0",
+    "nilearn>=0.10.3",
+    "scikit-image>=0.22",
+    "pyvista>=0.43",
+    "pyvistaqt>=0.11",
+    "PySide6>=6.6",
+    "Pillow>=10.0",
+    "platformdirs>=4.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+brain-viewer = "brain_viewer.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/brain_viewer"]
