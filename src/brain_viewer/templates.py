@@ -49,6 +49,77 @@ def _build_mni152_detailed() -> pv.PolyData:
     return _mask_to_polydata(data, img.affine, smoothing_iters=5, level=0.5)
 
 
+def _load_ho_sub_image():
+    """Return the Harvard-Oxford sub Nifti1Image (handling path-vs-image ambiguity)."""
+    import nibabel as nib
+    from nilearn import datasets
+
+    ho = datasets.fetch_atlas_harvard_oxford(
+        "sub-maxprob-thr25-2mm",
+        data_dir=str(config.ATLAS_CACHE_DIR),
+        symmetric_split=False,
+    )
+    maps = ho.maps
+    if isinstance(maps, (str, Path)):
+        return nib.load(str(maps))
+    return maps  # already a Nifti1Image
+
+
+def _ho_sub_label_index(needle: str) -> int | None:
+    """Return the Harvard-Oxford sub label index whose name contains `needle`."""
+    from nilearn import datasets
+
+    ho = datasets.fetch_atlas_harvard_oxford(
+        "sub-maxprob-thr25-2mm",
+        data_dir=str(config.ATLAS_CACHE_DIR),
+        symmetric_split=False,
+    )
+    for i, name in enumerate(ho.labels):
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="replace")
+        if needle.lower() in str(name).lower():
+            return i
+    return None
+
+
+def _build_mni152_subcortex() -> pv.PolyData:
+    """Subcortical-GM envelope — union of Pauli 2017 deterministic ROIs.
+
+    Harvard-Oxford sub includes "Cerebral White Matter" and "Cerebral Cortex"
+    labels that span most of each hemisphere, so using it as a shell gives
+    a full-brain blob. Pauli 2017 is all-GM-only (thalamus / striatum /
+    pallidum / hippocampus / amygdala / accumbens) — a proper subcortex shell.
+    """
+    import nibabel as nib
+    from nilearn import datasets
+
+    p = datasets.fetch_atlas_pauli_2017(atlas_type="deterministic", data_dir=str(config.ATLAS_CACHE_DIR))
+    img = nib.load(str(p.maps)) if isinstance(p.maps, (str, Path)) else p.maps
+    data = np.asarray(img.dataobj)
+    mask = data > 0
+    return _mask_to_polydata(mask, img.affine, smoothing_iters=config.TEMPLATE_SMOOTH_ITERS)
+
+
+def _build_mni152_brainstem() -> pv.PolyData:
+    """Brain-Stem envelope — just the Harvard-Oxford sub Brain-Stem label."""
+    idx = _ho_sub_label_index("brain-stem") or _ho_sub_label_index("brainstem")
+    if idx is None:
+        raise RuntimeError("Could not find a Brain-Stem label in Harvard-Oxford sub.")
+    img = _load_ho_sub_image()
+    data = np.asarray(img.dataobj)
+    mask = data == idx
+    return _mask_to_polydata(mask, img.affine, smoothing_iters=config.TEMPLATE_SMOOTH_ITERS)
+
+
+def _build_mni152_cerebellum() -> pv.PolyData:
+    """Union of SUIT anatomic cerebellar labels."""
+    from .external_atlases import _fetch_suit_anatom
+
+    atlas = _fetch_suit_anatom()
+    mask = atlas.volume > 0
+    return _mask_to_polydata(mask, atlas.affine, smoothing_iters=config.TEMPLATE_SMOOTH_ITERS)
+
+
 def _build_mni152_brain_mask() -> pv.PolyData:
     """Simple MNI152 brain-mask envelope — chunky but encloses all subcortex."""
     from nilearn import datasets
@@ -100,11 +171,14 @@ def _build_fsaverage_inflated() -> pv.PolyData:
 
 
 _BUILDERS: dict[str, tuple[str, Callable[[], pv.PolyData]]] = {
-    "mni152_detailed":    ("MNI152 (detailed, gyri)",    _build_mni152_detailed),
-    "mni152_brain":       ("MNI152 brain mask (simple)", _build_mni152_brain_mask),
-    "fsaverage_pial":     ("fsaverage pial",             _build_fsaverage_pial),
-    "fsaverage_white":    ("fsaverage white",            _build_fsaverage_white),
-    "fsaverage_inflated": ("fsaverage inflated",         _build_fsaverage_inflated),
+    "mni152_detailed":    ("MNI152 (detailed, gyri)",      _build_mni152_detailed),
+    "mni152_brain":       ("MNI152 brain mask (simple)",   _build_mni152_brain_mask),
+    "mni152_subcortex":   ("MNI152 subcortex (HO union)",  _build_mni152_subcortex),
+    "mni152_cerebellum":  ("MNI152 cerebellum (SUIT union)", _build_mni152_cerebellum),
+    "mni152_brainstem":   ("MNI152 brainstem",             _build_mni152_brainstem),
+    "fsaverage_pial":     ("fsaverage pial",               _build_fsaverage_pial),
+    "fsaverage_white":    ("fsaverage white",              _build_fsaverage_white),
+    "fsaverage_inflated": ("fsaverage inflated",           _build_fsaverage_inflated),
 }
 
 
