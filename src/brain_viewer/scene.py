@@ -40,6 +40,16 @@ class Layer:
     visible: bool = True
 
 
+@dataclass
+class TemplateShell:
+    id: str
+    name: str
+    mesh: pv.PolyData
+    opacity: float
+    visible: bool
+    actor: Any
+
+
 class SceneManager:
     def __init__(
         self,
@@ -54,10 +64,8 @@ class SceneManager:
         self.mesh_builder = mesh_builder
 
         self.layers: dict[str, Layer] = {}
-        self._template_id: str | None = None
-        self._template_actor: Any | None = None
-        self._template_opacity: float = config.DEFAULT_TEMPLATE_OPACITY
-        self._template_visible: bool = True
+        # Multiple template shells can be stacked; each has its own opacity.
+        self.template_shells: dict[str, TemplateShell] = {}
 
         plotter.set_background("white")
         try:
@@ -72,60 +80,60 @@ class SceneManager:
         except Exception:
             pass
 
-    # -- Template ------------------------------------------------------------
+    # -- Template shells -----------------------------------------------------
 
-    @property
-    def template_id(self) -> str | None:
-        return self._template_id
+    def add_template(self, template_id: str, opacity: float | None = None) -> None:
+        """Add a template shell to the scene. No-op if already present (updates opacity)."""
+        if template_id in self.template_shells:
+            if opacity is not None:
+                self.update_template(template_id, opacity=opacity)
+            return
 
-    def set_template(
+        tpl = self.templates.get_template(template_id)
+        op = config.DEFAULT_TEMPLATE_OPACITY if opacity is None else opacity
+        actor = self.plotter.add_mesh(
+            tpl.mesh,
+            color=(0.85, 0.85, 0.90),
+            opacity=op,
+            specular=0.3,
+            specular_power=15,
+            smooth_shading=True,
+            name=f"__template_{template_id}__",
+        )
+        try:
+            actor.prop.SetBackfaceCulling(True)
+        except Exception:
+            pass
+
+        self.template_shells[template_id] = TemplateShell(
+            id=template_id, name=tpl.name, mesh=tpl.mesh,
+            opacity=op, visible=True, actor=actor,
+        )
+        self._render()
+
+    def remove_template(self, template_id: str) -> None:
+        shell = self.template_shells.pop(template_id, None)
+        if shell is None:
+            return
+        self.plotter.remove_actor(shell.actor, render=False)
+        self._render()
+
+    def update_template(
         self,
         template_id: str,
         opacity: float | None = None,
         visible: bool | None = None,
     ) -> None:
-        if opacity is not None:
-            self._template_opacity = opacity
-        if visible is not None:
-            self._template_visible = visible
-
-        tpl = self.templates.get_template(template_id)
-        self._template_id = template_id
-
-        if self._template_actor is not None:
-            self.plotter.remove_actor(self._template_actor, render=False)
-            self._template_actor = None
-
-        if self._template_visible:
-            self._template_actor = self.plotter.add_mesh(
-                tpl.mesh,
-                color=(0.85, 0.85, 0.90),
-                opacity=self._template_opacity,
-                specular=0.3,
-                specular_power=15,
-                smooth_shading=True,
-                name="__template__",
-            )
-            # Backface culling on the transparent shell: only the near-camera
-            # triangles are drawn, so the back side of the brain doesn't stack
-            # on top of the ROIs and clutter the interior.
-            try:
-                self._template_actor.prop.SetBackfaceCulling(True)
-            except Exception:
-                pass
-        self._render()
-
-    def set_template_visible(self, visible: bool) -> None:
-        if self._template_id is None:
-            self._template_visible = visible
+        shell = self.template_shells.get(template_id)
+        if shell is None:
             return
-        self.set_template(self._template_id, visible=visible)
-
-    def set_template_opacity(self, opacity: float) -> None:
-        self._template_opacity = opacity
-        if self._template_actor is not None:
-            self._template_actor.prop.opacity = opacity
-            self._render()
+        if opacity is not None:
+            shell.opacity = opacity
+            shell.actor.prop.opacity = opacity
+        if visible is not None and visible != shell.visible:
+            shell.visible = visible
+            shell.actor.SetVisibility(visible)
+        self._render()
 
     # -- Layers --------------------------------------------------------------
 
@@ -275,12 +283,13 @@ class SceneManager:
         except Exception:
             pass
 
-        if self._template_visible and self._template_id is not None:
-            tpl = self.templates.get_template(self._template_id)
+        for shell in self.template_shells.values():
+            if not shell.visible:
+                continue
             tpl_actor = off.add_mesh(
-                tpl.mesh,
+                shell.mesh,
                 color=(0.85, 0.85, 0.90),
-                opacity=self._template_opacity,
+                opacity=shell.opacity,
                 specular=0.3,
                 specular_power=15,
                 smooth_shading=True,

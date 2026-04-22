@@ -12,6 +12,10 @@ from ..scene import SceneManager
 from ..templates import TemplateRegistry
 from .export_dialog import ExportDialog, ExportSettings
 from .layer_row import LayerRow
+from .template_row import TemplateRow
+
+
+DEFAULT_STARTING_TEMPLATE = "mni152_detailed"
 
 
 class ControlPanel(QtWidgets.QWidget):
@@ -28,6 +32,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.templates = templates
 
         self._layer_rows: dict[str, LayerRow] = {}
+        self._template_rows: dict[str, TemplateRow] = {}
         self._palette_idx: int = 0
 
         outer = QtWidgets.QVBoxLayout(self)
@@ -46,27 +51,31 @@ class ControlPanel(QtWidgets.QWidget):
     # ---- Sections -----------------------------------------------------------
 
     def _build_template_group(self) -> QtWidgets.QGroupBox:
-        box = QtWidgets.QGroupBox("Template")
-        form = QtWidgets.QFormLayout(box)
+        box = QtWidgets.QGroupBox("Template shells")
+        v = QtWidgets.QVBoxLayout(box)
 
+        add_row = QtWidgets.QHBoxLayout()
         self.template_combo = QtWidgets.QComboBox()
         for tid, name in self.templates.list_templates():
             self.template_combo.addItem(name, tid)
-        self.template_combo.currentIndexChanged.connect(self._on_template_changed)
-        form.addRow("Surface", self.template_combo)
+        add_row.addWidget(self.template_combo, 1)
 
-        self.template_opacity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.template_opacity_slider.setRange(0, 100)
-        self.template_opacity_slider.setValue(int(config.DEFAULT_TEMPLATE_OPACITY * 100))
-        self.template_opacity_slider.valueChanged.connect(
-            lambda v: self.scene.set_template_opacity(v / 100.0)
-        )
-        form.addRow("Opacity", self.template_opacity_slider)
+        add_btn = QtWidgets.QPushButton("Add shell")
+        add_btn.clicked.connect(self._add_selected_template)
+        add_row.addWidget(add_btn)
+        v.addLayout(add_row)
 
-        self.template_visible_check = QtWidgets.QCheckBox("Show template")
-        self.template_visible_check.setChecked(True)
-        self.template_visible_check.toggled.connect(self.scene.set_template_visible)
-        form.addRow(self.template_visible_check)
+        # Scrollable stack of active shells.
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(90)
+        container = QtWidgets.QWidget()
+        self._templates_vbox = QtWidgets.QVBoxLayout(container)
+        self._templates_vbox.setContentsMargins(0, 0, 0, 0)
+        self._templates_vbox.setSpacing(2)
+        self._templates_vbox.addStretch(1)
+        scroll.setWidget(container)
+        v.addWidget(scroll)
 
         return box
 
@@ -149,20 +158,23 @@ class ControlPanel(QtWidgets.QWidget):
     # ---- Behaviour ----------------------------------------------------------
 
     def _init_defaults(self) -> None:
-        if self.template_combo.count() > 0:
-            self._on_template_changed(self.template_combo.currentIndex())
+        # Auto-add the default starting shell.
+        for i in range(self.template_combo.count()):
+            if self.template_combo.itemData(i) == DEFAULT_STARTING_TEMPLATE:
+                self.template_combo.setCurrentIndex(i)
+                break
+        self._add_selected_template()
         if self.atlas_combo.count() > 0:
             self._on_atlas_changed(self.atlas_combo.currentIndex())
 
-    def _on_template_changed(self, _index: int) -> None:
+    def _add_selected_template(self) -> None:
         tid = self.template_combo.currentData()
-        if not tid:
+        if not tid or tid in self._template_rows:
             return
-        opacity = self.template_opacity_slider.value() / 100.0
-        visible = self.template_visible_check.isChecked()
+        display_name = self.template_combo.currentText()
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
-            self.scene.set_template(tid, opacity=opacity, visible=visible)
+            self.scene.add_template(tid, opacity=config.DEFAULT_TEMPLATE_OPACITY)
         except Exception as exc:
             QtWidgets.QApplication.restoreOverrideCursor()
             QtWidgets.QMessageBox.warning(
@@ -171,6 +183,32 @@ class ControlPanel(QtWidgets.QWidget):
             return
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
+        self._add_template_row(tid, display_name, config.DEFAULT_TEMPLATE_OPACITY, True)
+
+    def _add_template_row(
+        self,
+        template_id: str,
+        display_name: str,
+        opacity: float,
+        visible: bool,
+    ) -> None:
+        row = TemplateRow(template_id, display_name, opacity, visible)
+        row.visibilityToggled.connect(
+            lambda tid, v: self.scene.update_template(tid, visible=v)
+        )
+        row.opacityChanged.connect(
+            lambda tid, o: self.scene.update_template(tid, opacity=o)
+        )
+        row.removeRequested.connect(self._remove_template)
+        self._templates_vbox.insertWidget(self._templates_vbox.count() - 1, row)
+        self._template_rows[template_id] = row
+
+    def _remove_template(self, template_id: str) -> None:
+        self.scene.remove_template(template_id)
+        row = self._template_rows.pop(template_id, None)
+        if row is not None:
+            row.setParent(None)
+            row.deleteLater()
 
     def _on_atlas_changed(self, _index: int) -> None:
         aid = self.atlas_combo.currentData()

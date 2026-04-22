@@ -47,7 +47,7 @@ def main() -> None:
     plotter = pv.Plotter(off_screen=True, window_size=config.EXPORT_BASE_SIZE)
     scene = SceneManager(plotter, atlases, templates, mesh_builder)
 
-    scene.set_template("mni152_brain", opacity=config.DEFAULT_TEMPLATE_OPACITY)
+    scene.add_template("mni152_detailed", opacity=config.DEFAULT_TEMPLATE_OPACITY)
 
     for atlas_id, needle, color, show_label in HIGHLIGHTS:
         atlas = atlases.get_atlas(atlas_id)

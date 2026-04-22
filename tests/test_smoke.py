@@ -52,7 +52,7 @@ def test_scene_export_produces_transparent_png(tmp_path: Path) -> None:
 
     plotter = pv.Plotter(off_screen=True, window_size=config.EXPORT_BASE_SIZE)
     scene = SceneManager(plotter, reg, templates, mb)
-    scene.set_template("mni152_brain", opacity=0.15)
+    scene.add_template("mni152_brain", opacity=0.15)
 
     atlas = reg.get_atlas("harvard_oxford_sub")
     amyg = next(lb for lb in atlas.labels if "Left Amygdala" in lb.name)
