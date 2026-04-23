@@ -409,6 +409,46 @@ def _fetch_melbourne_4() -> AtlasData: return _fetch_melbourne(4)
 # ---- JHU white matter labels (via templateflow / FSL) ----------------------
 
 
+# ---- Brainnetome Atlas (Fan 2016, 246 regions) -----------------------------
+# Official download on atlas.brainnetome.org is gated behind a Chinese cloud
+# landing page (pan.cstcloud.cn) that can't be streamed directly. We mirror
+# from a well-maintained GitHub copy that co-locates the 2mm volume with the
+# official BN_Atlas_246_LUT.txt.
+
+_BNA_RAW = (
+    "https://raw.githubusercontent.com/floristijhuis/HCP-rfMRI-repository/"
+    "master/Atlases/Brainnetome/info"
+)
+
+
+def _fetch_brainnetome() -> AtlasData:
+    atlas_id = "brainnetome_246"
+    vol_path = _fetch(
+        atlas_id,
+        f"{_BNA_RAW}/BN_Atlas_246_2mm.nii.gz",
+        "BN_Atlas_246_2mm.nii.gz",
+    )
+    lut_path = _fetch(
+        atlas_id,
+        f"{_BNA_RAW}/BN_Atlas_246_LUT.txt",
+        "BN_Atlas_246_LUT.txt",
+    )
+    volume, affine = _load_volume(vol_path)
+    volume = _squeeze(volume).astype(np.int32)
+    label_map = _clean_label_map(_read_labels_file(lut_path))
+    labels = _labels_from_map(volume, label_map, is_probabilistic=False)
+    return AtlasData(
+        id=atlas_id,
+        name="Brainnetome 246 (Fan 2016)",
+        volume=volume,
+        affine=affine,
+        labels=labels,
+    )
+
+
+# ---- JHU white matter labels (via templateflow / FSL) ----------------------
+
+
 def _fetch_jhu_wm() -> AtlasData:
     atlas_id = "jhu_wm_labels"
     # NeuroVault image download link
@@ -447,4 +487,5 @@ EXTERNAL_ENTRIES: list[AtlasEntry] = [
     _make_entry("melbourne_sub_s3",    "Subcortex",   "Melbourne Subcortex Scale 3 (50 ROIs)", _fetch_melbourne_3),
     _make_entry("melbourne_sub_s4",    "Subcortex",   "Melbourne Subcortex Scale 4 (54 ROIs)", _fetch_melbourne_4),
     _make_entry("jhu_wm_labels",       "White matter","JHU ICBM white-matter labels (1mm)",    _fetch_jhu_wm),
+    _make_entry("brainnetome_246",     "Whole brain", "Brainnetome 246 (Fan 2016)",            _fetch_brainnetome),
 ]
