@@ -1,4 +1,4 @@
-"""Atlas access for brain_viewer.
+"""Atlas access for ez_brain_viewer.
 
 Each fetcher normalizes heterogeneous nilearn return types into a uniform
 `AtlasData` dataclass. Deterministic atlases yield a 3D int volume; probabilistic
@@ -419,9 +419,9 @@ def _fetch_glasser() -> AtlasData:
     """Load the Glasser HCP-MMP1.0 atlas projected to MNI152 volume space.
 
     This file is not bundled with nilearn. The user must place it at:
-        ~/.cache/brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
+        ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
     along with a CSV of labels at:
-        ~/.cache/brain_viewer/atlases/glasser/HCP-MMP1_labels.csv
+        ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_labels.csv
     (columns: index, name). Raises a friendly error otherwise.
     """
     root = config.ATLAS_CACHE_DIR / "glasser"

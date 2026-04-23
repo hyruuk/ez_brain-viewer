@@ -1,4 +1,4 @@
-# brain_viewer
+# EZ Brain Viewer
 
 Figure-ready 3D brain viewer. Pick a transparent template shell, pick an atlas, pick the regions you want highlighted, style them, export a transparent-background PNG at any DPI.
 
@@ -20,13 +20,13 @@ pip install -e ".[dev]"
 
 Inside the repo:
 ```bash
-.venv/bin/python -m brain_viewer
+.venv/bin/python -m ez_brain_viewer
 ```
 
 Or from anywhere (once per machine, after `pip install -e`):
 ```bash
-ln -sf "$(pwd)/.venv/bin/brain-viewer" ~/.local/bin/brain-viewer
-brain-viewer
+ln -sf "$(pwd)/.venv/bin/ez-brain-viewer" ~/.local/bin/ez-brain-viewer
+ez-brain-viewer
 ```
 
 - **Template** section: switch between MNI152 and the three fsaverage variants; adjust opacity; hide/show the shell.
@@ -51,7 +51,7 @@ Writes `scripts/demo.png` and `scripts/demo_anterior.png`.
 
 ## Atlases
 
-The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcortex / Cerebellum / Thalamus / White matter / Whole brain / Networks). First-time loads download through nilearn or a pinned external URL; subsequent loads hit the on-disk cache under `~/.cache/brain_viewer/atlases/`.
+The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcortex / Cerebellum / Thalamus / White matter / Whole brain / Networks). First-time loads download through nilearn or a pinned external URL; subsequent loads hit the on-disk cache under `~/.cache/ez_brain_viewer/atlases/`.
 
 ### Cortex
 | id | Source | Regions |
@@ -98,6 +98,7 @@ The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcort
 | `basc_{64,122,444}_sym` | nilearn `fetch_atlas_basc_multiscale_2015` | 64 / 122 / 444 |
 | `difumo_{64,256,1024}` | nilearn `fetch_atlas_difumo` | 64 / 256 / 1024 (probabilistic) |
 | `craddock_2012` | nilearn `fetch_atlas_craddock_2012` | ~43 (scorr_mean) |
+| `brainnetome_246` | github mirror of Fan 2016 BN_Atlas (official LUT) | 246 (210 cortical + 36 subcortical) |
 | `msdl` | nilearn `fetch_atlas_msdl` | 39 probabilistic |
 | `smith_2009_rsn_{10,70}` | nilearn `fetch_atlas_smith_2009` | 10 / 70 ICA networks |
 
@@ -110,13 +111,12 @@ The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcort
 
 These require registration, have ambiguous redistribution terms, or aren't in MNI152 volume form — use the **`+`** button in the Atlas section to paste a URL or local file after downloading:
 
-- **Brainnetome** (BN_Atlas, 246 regions) — https://atlas.brainnetome.org (registration)
 - **AICHA** (384 regions) — Joliot lab / Lead-DBS
 - **Iglesias hippocampal subfields** — FreeSurfer license; tied to FreeSurfer install
 - **Gordon 2016** (333 cortical parcels) — BALSA (CIFTI surface-only by default)
 - **Morel thalamus** — Zenodo (search "Morel atlas")
 - **CIT168** (14 subcortical ROIs) — https://osf.io/r2hvk
-- **Glasser bilateral (360 regions)** — place at `~/.cache/brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz` with a `HCP-MMP1_labels.csv` alongside (see `glasser_hcp_mmp1` entry).
+- **Glasser bilateral (360 regions)** — place at `~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz` with a `HCP-MMP1_labels.csv` alongside (see `glasser_hcp_mmp1` entry).
 
 ### Custom atlases
 
@@ -126,7 +126,7 @@ To add your own parcellation (e.g. a more detailed insula atlas), click **`+`** 
 - **Volume** — a local NIfTI path (`.nii` / `.nii.gz`) or an HTTP(S) URL. Must be in MNI152 space to align with the template shells. 4D volumes are auto-detected as probabilistic (one channel per region, thresholded at 0.25 by default for mesh extraction).
 - **Labels** (optional) — a CSV/TSV with `index` + `name` columns, a JSON dict (`{"1": "Insula_anterior", ...}`), or a plain text file with `index name` lines (FSL LUT style). If omitted, regions are auto-named `Label N` from unique integer values in the volume.
 
-The dialog downloads or copies the files into `~/.cache/brain_viewer/atlases/custom/<id>/` and writes a small `index.json`, so your custom atlases persist across sessions. The **`✕`** button next to the dropdown removes the currently-selected custom atlas (cache files and all).
+The dialog downloads or copies the files into `~/.cache/ez_brain_viewer/atlases/custom/<id>/` and writes a small `index.json`, so your custom atlases persist across sessions. The **`✕`** button next to the dropdown removes the currently-selected custom atlas (cache files and all).
 
 ### Glasser HCP-MMP1.0 (manual install)
 
@@ -135,11 +135,11 @@ The Glasser atlas is not bundled with nilearn because of licensing. To enable it
 1. Download an MNI152-projected volume version (CC-BY), e.g. from figshare ([search "HCP-MMP1 MNI"](https://figshare.com/search?q=HCP-MMP1+MNI)).
 2. Place the files at:
    ```
-   ~/.cache/brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
-   ~/.cache/brain_viewer/atlases/glasser/HCP-MMP1_labels.csv
+   ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
+   ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_labels.csv
    ```
    The CSV must have `index,name` columns (one row per parcel, integer index matching the volume value).
-3. Restart brain_viewer. "Glasser HCP-MMP1.0" will then load like any other atlas.
+3. Restart EZ Brain Viewer. "Glasser HCP-MMP1.0" will then load like any other atlas.
 
 ## Templates
 
@@ -155,7 +155,7 @@ Each template is a glass shell mesh rendered semi-transparent. ROI solids always
 
 **Alignment caveat**: fsaverage lives in FreeSurfer's MNI305-ish space — ROIs in MNI152 volume space will have mm-scale drift relative to fsaverage shells, mostly visible at the cortical surface. For precise overlay, use `mni152_detailed`. fsaverage is best for cortical-only figures where stylized aesthetics matter more than mm-level anatomical precision.
 
-Template meshes are cached at `~/.cache/brain_viewer/templates/{id}_v{N}.vtp` — delete to force a rebuild.
+Template meshes are cached at `~/.cache/ez_brain_viewer/templates/{id}_v{N}.vtp` — delete to force a rebuild.
 
 ## Export
 
@@ -168,11 +168,17 @@ The live viewer window is never resized during export.
 
 ## Caching
 
-- Atlas downloads: `~/.cache/brain_viewer/atlases/`
-- Template meshes (pre-computed `.vtp`): `~/.cache/brain_viewer/templates/`
-- ROI meshes (per atlas label, `.vtp`): `~/.cache/brain_viewer/meshes/`
+- Atlas downloads: `~/.cache/ez_brain_viewer/atlases/`
+- Template meshes (pre-computed `.vtp`): `~/.cache/ez_brain_viewer/templates/`
+- ROI meshes (per atlas label, `.vtp`): `~/.cache/ez_brain_viewer/meshes/`
 
 Safe to delete any of these to force a rebuild.
+
+If you are upgrading from the previous `brain_viewer` name, migrate your existing downloads in one command:
+
+```bash
+mv ~/.cache/brain_viewer ~/.cache/ez_brain_viewer
+```
 
 ## License
 

@@ -26,7 +26,7 @@ class ExportDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
 
-        self.path_edit = QtWidgets.QLineEdit(str(self._default_dir / "brain_viewer.png"))
+        self.path_edit = QtWidgets.QLineEdit(str(self._default_dir / "ez_brain_viewer.png"))
         browse = QtWidgets.QPushButton("Browse…")
         browse.clicked.connect(self._browse)
         path_row = QtWidgets.QHBoxLayout()

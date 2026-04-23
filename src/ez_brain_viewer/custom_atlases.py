@@ -1,6 +1,6 @@
 """User-supplied custom atlases.
 
-A small JSON index at ``~/.cache/brain_viewer/atlases/custom/index.json`` tracks
+A small JSON index at ``~/.cache/ez_brain_viewer/atlases/custom/index.json`` tracks
 registered custom atlases. Each spec points at a cached NIfTI volume and an
 optional labels CSV/TSV/TXT. Adding a custom atlas downloads-or-copies the
 source files into that dir so it keeps working offline afterwards.

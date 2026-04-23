@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pyvista as pv
 
-from brain_viewer import config
-from brain_viewer.atlases import AtlasRegistry
-from brain_viewer.meshing import MeshBuilder
-from brain_viewer.scene import SceneManager
-from brain_viewer.templates import TemplateRegistry
+from ez_brain_viewer import config
+from ez_brain_viewer.atlases import AtlasRegistry
+from ez_brain_viewer.meshing import MeshBuilder
+from ez_brain_viewer.scene import SceneManager
+from ez_brain_viewer.templates import TemplateRegistry
 
 
 HIGHLIGHTS = [
