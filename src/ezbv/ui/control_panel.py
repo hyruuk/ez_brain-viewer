@@ -18,7 +18,17 @@ from .layer_row import LayerRow
 from .template_row import TemplateRow
 
 
-DEFAULT_STARTING_TEMPLATE = "mni152_detailed"
+# Startup shell combo: MNI152 brain at moderate opacity with the subcortex,
+# cerebellum, brainstem, and fsaverage pial stacked on top at glass opacity.
+# Layered like this, ROIs anywhere in the brain stay visible through the
+# surrounding shells regardless of camera angle.
+DEFAULT_STARTING_SHELLS: tuple[tuple[str, float], ...] = (
+    ("mni152_brain",      0.5),
+    ("mni152_subcortex",  0.15),
+    ("mni152_cerebellum", 0.15),
+    ("mni152_brainstem",  0.15),
+    ("fsaverage_pial",    0.15),
+)
 DEFAULT_STARTING_ATLAS = "harvard_oxford_cort"
 
 
@@ -185,12 +195,9 @@ class ControlPanel(QtWidgets.QWidget):
     # ---- Behaviour ----------------------------------------------------------
 
     def _init_defaults(self) -> None:
-        # Auto-add the default starting shell.
-        for i in range(self.template_combo.count()):
-            if self.template_combo.itemData(i) == DEFAULT_STARTING_TEMPLATE:
-                self.template_combo.setCurrentIndex(i)
-                break
-        self._add_selected_template()
+        # Auto-add the default starting shell combo.
+        for tid, opacity in DEFAULT_STARTING_SHELLS:
+            self._add_template(tid, opacity)
         if self.atlas_combo.count() > 0:
             for i in range(self.atlas_combo.count()):
                 if self.atlas_combo.itemData(i) == DEFAULT_STARTING_ATLAS:
@@ -200,12 +207,17 @@ class ControlPanel(QtWidgets.QWidget):
 
     def _add_selected_template(self) -> None:
         tid = self.template_combo.currentData()
-        if not tid or tid in self._template_rows:
+        if not tid:
             return
-        display_name = self.template_combo.currentText()
+        self._add_template(tid, config.DEFAULT_TEMPLATE_OPACITY)
+
+    def _add_template(self, tid: str, opacity: float) -> None:
+        if tid in self._template_rows:
+            return
+        display_name = dict(self.templates.list_templates()).get(tid, tid)
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
-            self.scene.add_template(tid, opacity=config.DEFAULT_TEMPLATE_OPACITY)
+            self.scene.add_template(tid, opacity=opacity)
         except Exception as exc:
             QtWidgets.QApplication.restoreOverrideCursor()
             QtWidgets.QMessageBox.warning(
@@ -214,7 +226,7 @@ class ControlPanel(QtWidgets.QWidget):
             return
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
-        self._add_template_row(tid, display_name, config.DEFAULT_TEMPLATE_OPACITY, True)
+        self._add_template_row(tid, display_name, opacity, True)
 
     def _add_template_row(
         self,
