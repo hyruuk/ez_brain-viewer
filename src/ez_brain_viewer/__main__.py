@@ -1,4 +1,4 @@
-"""Entry point: `python -m ez_brain_viewer` boots the Qt app."""
+"""Entry point: `python -m ezbv` boots the Qt app."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ def main() -> int:
         QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
-    app.setApplicationName("ez_brain_viewer")         # used by QSettings / QStandardPaths
-    app.setApplicationDisplayName("EZ Brain Viewer")  # user-facing
+    app.setApplicationName("ezbv")                    # used by QSettings / QStandardPaths
+    app.setApplicationDisplayName("ezbv")             # user-facing
 
     # Silence the xdg-desktop-portal DBus warning that fires when the session bus
     # is already bound to another app ID — harmless, but noisy on stdout.

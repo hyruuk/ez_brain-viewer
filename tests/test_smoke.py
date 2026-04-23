@@ -1,4 +1,4 @@
-"""Smoke tests for the ez_brain_viewer pipeline.
+"""Smoke tests for the ezbv pipeline.
 
 These exercise the end-to-end flow without launching the Qt GUI:
 - atlas fetch (cached in CI reruns)
@@ -17,12 +17,12 @@ from PIL import Image
 
 import pytest
 
-from ez_brain_viewer import config
-from ez_brain_viewer.atlases import AtlasRegistry
-from ez_brain_viewer.external_atlases import EXTERNAL_ENTRIES
-from ez_brain_viewer.meshing import MeshBuilder
-from ez_brain_viewer.scene import SceneManager
-from ez_brain_viewer.templates import TemplateRegistry
+from ezbv import config
+from ezbv.atlases import AtlasRegistry
+from ezbv.external_atlases import EXTERNAL_ENTRIES
+from ezbv.meshing import MeshBuilder
+from ezbv.scene import SceneManager
+from ezbv.templates import TemplateRegistry
 
 
 # Atlases that are small-cached and reliably load in CI without long downloads.

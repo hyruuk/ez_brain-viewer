@@ -4,7 +4,7 @@ from pathlib import Path
 
 from platformdirs import user_cache_dir
 
-APP_NAME = "ez_brain_viewer"
+APP_NAME = "ezbv"
 
 CACHE_DIR: Path = Path(user_cache_dir(APP_NAME))
 MESH_CACHE_DIR: Path = CACHE_DIR / "meshes"

@@ -1,6 +1,6 @@
-# EZ Brain Viewer
+# ezbv
 
-Figure-ready 3D brain viewer. Pick a transparent template shell, pick an atlas, pick the regions you want highlighted, style them, export a transparent-background PNG at any DPI.
+Figure-ready 3D brain viewer. Pick a transparent template shell, pick an atlas, pick the regions you want highlighted, style them, save the scene for later, and export a high-DPI PNG or a rotating GIF.
 
 ## Install
 
@@ -20,20 +20,21 @@ pip install -e ".[dev]"
 
 Inside the repo:
 ```bash
-.venv/bin/python -m ez_brain_viewer
+.venv/bin/python -m ezbv
 ```
 
 Or from anywhere (once per machine, after `pip install -e`):
 ```bash
-ln -sf "$(pwd)/.venv/bin/ez-brain-viewer" ~/.local/bin/ez-brain-viewer
-ez-brain-viewer
+ln -sf "$(pwd)/.venv/bin/ezbv" ~/.local/bin/ezbv
+ezbv
 ```
 
-- **Template** section: switch between MNI152 and the three fsaverage variants; adjust opacity; hide/show the shell.
-- **Atlas** section: pick an atlas, filter regions, multi-select and click *Add* (or double-click a region).
+- **Template** section: switch between MNI152 and the three fsaverage variants; adjust opacity; hide/show the shell; toggle back-face culling.
+- **Atlas** section: pick an atlas, filter regions, multi-select and click *Add* (or double-click a region). Use the **+** button to register a custom NIfTI + labels pair.
 - **Layers** section: each row has a visibility checkbox, color picker, opacity slider, label toggle, and remove (✕). Hidden layers are greyed out and excluded from exports.
 - **View** section: six cardinal view presets plus an oblique.
-- **File → Export PNG…** (or Ctrl+E): choose width (px), DPI, transparent background.
+- **File → Open scene… / Save scene…** (Ctrl+O / Ctrl+S): persist the full editable scene (active shells, layers, colors, opacities, label toggles, visibility, camera, back-face toggle) as a `*.ezbv.json` file and reopen it later. Missing atlases or templates on load produce warnings; everything else restores.
+- **File → Export figure…** (or Ctrl+E): choose format (PNG still or animated GIF), width (px), DPI, transparent background. GIF adds rotation axis (vertical / horizontal / roll), total sweep, frame count, and cycle duration.
 
 ## Quick demo (no GUI)
 
@@ -51,7 +52,7 @@ Writes `scripts/demo.png` and `scripts/demo_anterior.png`.
 
 ## Atlases
 
-The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcortex / Cerebellum / Thalamus / White matter / Whole brain / Networks). First-time loads download through nilearn or a pinned external URL; subsequent loads hit the on-disk cache under `~/.cache/ez_brain_viewer/atlases/`.
+The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcortex / Cerebellum / Thalamus / White matter / Whole brain / Networks). First-time loads download through nilearn or a pinned external URL; subsequent loads hit the on-disk cache under `~/.cache/ezbv/atlases/`.
 
 ### Cortex
 | id | Source | Regions |
@@ -98,7 +99,7 @@ The dropdown ships **~40 built-in atlases** grouped by anatomy (Cortex / Subcort
 | `basc_{64,122,444}_sym` | nilearn `fetch_atlas_basc_multiscale_2015` | 64 / 122 / 444 |
 | `difumo_{64,256,1024}` | nilearn `fetch_atlas_difumo` | 64 / 256 / 1024 (probabilistic) |
 | `craddock_2012` | nilearn `fetch_atlas_craddock_2012` | ~43 (scorr_mean) |
-| `brainnetome_246` | github mirror of Fan 2016 BN_Atlas (official LUT) | 246 (210 cortical + 36 subcortical) |
+| `brainnetome_246` | github mirror of Fan 2016 BN_Atlas (official LUT) | 246 (210 cortical + 36 subcortical, incl. 6 insular subregions/hemi) |
 | `msdl` | nilearn `fetch_atlas_msdl` | 39 probabilistic |
 | `smith_2009_rsn_{10,70}` | nilearn `fetch_atlas_smith_2009` | 10 / 70 ICA networks |
 
@@ -116,7 +117,7 @@ These require registration, have ambiguous redistribution terms, or aren't in MN
 - **Gordon 2016** (333 cortical parcels) — BALSA (CIFTI surface-only by default)
 - **Morel thalamus** — Zenodo (search "Morel atlas")
 - **CIT168** (14 subcortical ROIs) — https://osf.io/r2hvk
-- **Glasser bilateral (360 regions)** — place at `~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz` with a `HCP-MMP1_labels.csv` alongside (see `glasser_hcp_mmp1` entry).
+- **Glasser bilateral (360 regions)** — place at `~/.cache/ezbv/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz` with a `HCP-MMP1_labels.csv` alongside (see `glasser_hcp_mmp1` entry).
 
 ### Custom atlases
 
@@ -126,7 +127,7 @@ To add your own parcellation (e.g. a more detailed insula atlas), click **`+`** 
 - **Volume** — a local NIfTI path (`.nii` / `.nii.gz`) or an HTTP(S) URL. Must be in MNI152 space to align with the template shells. 4D volumes are auto-detected as probabilistic (one channel per region, thresholded at 0.25 by default for mesh extraction).
 - **Labels** (optional) — a CSV/TSV with `index` + `name` columns, a JSON dict (`{"1": "Insula_anterior", ...}`), or a plain text file with `index name` lines (FSL LUT style). If omitted, regions are auto-named `Label N` from unique integer values in the volume.
 
-The dialog downloads or copies the files into `~/.cache/ez_brain_viewer/atlases/custom/<id>/` and writes a small `index.json`, so your custom atlases persist across sessions. The **`✕`** button next to the dropdown removes the currently-selected custom atlas (cache files and all).
+The dialog downloads or copies the files into `~/.cache/ezbv/atlases/custom/<id>/` and writes a small `index.json`, so your custom atlases persist across sessions. The **`✕`** button next to the dropdown removes the currently-selected custom atlas (cache files and all).
 
 ### Glasser HCP-MMP1.0 (manual install)
 
@@ -135,11 +136,11 @@ The Glasser atlas is not bundled with nilearn because of licensing. To enable it
 1. Download an MNI152-projected volume version (CC-BY), e.g. from figshare ([search "HCP-MMP1 MNI"](https://figshare.com/search?q=HCP-MMP1+MNI)).
 2. Place the files at:
    ```
-   ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
-   ~/.cache/ez_brain_viewer/atlases/glasser/HCP-MMP1_labels.csv
+   ~/.cache/ezbv/atlases/glasser/HCP-MMP1_on_MNI152.nii.gz
+   ~/.cache/ezbv/atlases/glasser/HCP-MMP1_labels.csv
    ```
    The CSV must have `index,name` columns (one row per parcel, integer index matching the volume value).
-3. Restart EZ Brain Viewer. "Glasser HCP-MMP1.0" will then load like any other atlas.
+3. Restart ezbv. "Glasser HCP-MMP1.0" will then load like any other atlas.
 
 ## Templates
 
@@ -155,29 +156,56 @@ Each template is a glass shell mesh rendered semi-transparent. ROI solids always
 
 **Alignment caveat**: fsaverage lives in FreeSurfer's MNI305-ish space — ROIs in MNI152 volume space will have mm-scale drift relative to fsaverage shells, mostly visible at the cortical surface. For precise overlay, use `mni152_detailed`. fsaverage is best for cortical-only figures where stylized aesthetics matter more than mm-level anatomical precision.
 
-Template meshes are cached at `~/.cache/ez_brain_viewer/templates/{id}_v{N}.vtp` — delete to force a rebuild.
+Template meshes are cached at `~/.cache/ezbv/templates/{id}_v{N}.vtp` — delete to force a rebuild.
+
+## Scenes (save / open)
+
+**File → Save scene…** writes an `*.ezbv.json` file describing everything the user can edit in the GUI:
+
+- Active template shells (id, opacity, visibility)
+- Layers (atlas id, label index + display name, color RGB, opacity, label toggle, visibility)
+- Back-face culling toggle
+- Camera (position, focal point, view-up)
+
+**File → Open scene…** clears the current scene, re-fetches the referenced atlases & templates, rebuilds meshes from the on-disk cache, restores all state, and syncs the left-panel rows. Missing items (e.g. a custom atlas that was deleted, or a renamed template id) are reported as warnings and the rest of the scene still loads.
+
+The file is plain indented JSON — it's fine to hand-edit colors, opacities, or visibility flags outside the GUI.
+
+Legacy `ez_brain_viewer.scene` format strings from pre-rename scene files are still accepted on load.
 
 ## Export
 
-File → Export PNG… lets you set:
+File → Export figure… opens a dialog with two formats:
+
+**PNG (still image)**
 - **Width (px)** — output pixel width. The off-screen plotter renders at a fixed 1600×1200 base then scales up; Pillow resizes to exactly your target width.
 - **DPI** — metadata only (PNG `pHYs` chunk). VTK has no concept of DPI; this is what LaTeX / Inkscape / MS Word read to decide physical print size.
 - **Transparent background** — on by default; alpha channel is preserved.
+
+**Animated GIF (rotating)**
+- **Width (px)** — defaults to 1200 px because GIFs balloon in file size with dimensions × frames.
+- **Axis** — `vertical` (azimuth spin around the up axis; classic rotating brain), `horizontal` (elevation pitch), or `roll` (line-of-sight roll).
+- **Total rotation** — sweep angle across the whole clip. 360° gives a seamless loop.
+- **Frames** — number of captured frames. More = smoother motion, larger file.
+- **Cycle duration** — total playback time (seconds) for one full sweep. Per-frame duration = `1000 × duration / frames` ms.
+- **Loop indefinitely** — standard GIF looping flag.
+- **Background** — always solid white. GIF supports only 1-bit palette transparency, which bleeds through any semi-transparent shell; for alpha-correct output, export PNG.
 
 The live viewer window is never resized during export.
 
 ## Caching
 
-- Atlas downloads: `~/.cache/ez_brain_viewer/atlases/`
-- Template meshes (pre-computed `.vtp`): `~/.cache/ez_brain_viewer/templates/`
-- ROI meshes (per atlas label, `.vtp`): `~/.cache/ez_brain_viewer/meshes/`
+- Atlas downloads: `~/.cache/ezbv/atlases/`
+- Template meshes (pre-computed `.vtp`): `~/.cache/ezbv/templates/`
+- ROI meshes (per atlas label, `.vtp`): `~/.cache/ezbv/meshes/`
+- App icon (rendered from the MNI152 mesh on first run): `~/.cache/ezbv/app_icon_v1.png`
 
 Safe to delete any of these to force a rebuild.
 
-If you are upgrading from the previous `brain_viewer` name, migrate your existing downloads in one command:
+If you are upgrading from the previous `brain_viewer` / `ez_brain_viewer` names, migrate your existing downloads in one command:
 
 ```bash
-mv ~/.cache/brain_viewer ~/.cache/ez_brain_viewer
+mv ~/.cache/ez_brain_viewer ~/.cache/ezbv   # or ~/.cache/brain_viewer if you never went through the intermediate name
 ```
 
 ## License

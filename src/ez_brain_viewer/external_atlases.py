@@ -1,8 +1,8 @@
 """External atlases fetched from pinned URLs (figshare / Zenodo / GitHub etc).
 
-Each fetcher downloads to ``~/.cache/ez_brain_viewer/atlases/external/<atlas_id>/``
+Each fetcher downloads to ``~/.cache/ezbv/atlases/external/<atlas_id>/``
 on first call and caches forever. Accompanying label files either travel with
-the volume or are bundled under ``ez_brain_viewer/data/labels/<atlas_id>.csv``.
+the volume or are bundled under ``ezbv/data/labels/<atlas_id>.csv``.
 
 Failures surface as ``RuntimeError`` with enough detail for the UI's
 existing warning dialog — the app never crashes on a dead URL.

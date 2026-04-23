@@ -17,7 +17,7 @@ from .control_panel import ControlPanel
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Brain viewer")
+        self.setWindowTitle("ezbv")
         self.setWindowIcon(get_app_icon())
         self.resize(1400, 900)
 
@@ -49,10 +49,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Menu.
         file_menu = self.menuBar().addMenu("&File")
-        export_action = QtGui.QAction("Export PNG…", self)
+
+        open_action = QtGui.QAction("Open scene…", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.control_panel.open_scene_from_file)
+        file_menu.addAction(open_action)
+
+        save_action = QtGui.QAction("Save scene…", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.control_panel.save_scene_to_file)
+        file_menu.addAction(save_action)
+
+        file_menu.addSeparator()
+
+        export_action = QtGui.QAction("Export figure…", self)
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(self.control_panel._open_export_dialog)
         file_menu.addAction(export_action)
+
         file_menu.addSeparator()
         quit_action = QtGui.QAction("Quit", self)
         quit_action.setShortcut("Ctrl+Q")

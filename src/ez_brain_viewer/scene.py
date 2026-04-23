@@ -6,6 +6,7 @@ Works with both `pyvista.Plotter` (headless tests, exports) and
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -274,27 +275,140 @@ class SceneManager:
         self.plotter.reset_camera()
         self._render()
 
+    # -- Scene save / load ---------------------------------------------------
+
+    SCENE_FORMAT: str = "ezbv.scene"
+    SCENE_VERSION: int = 1
+
+    def scene_snapshot(self) -> dict[str, Any]:
+        """Return a JSON-serialisable snapshot of the editable scene state."""
+        try:
+            cam = self.plotter.camera
+            camera = {
+                "position": [float(x) for x in cam.position],
+                "focal_point": [float(x) for x in cam.focal_point],
+                "view_up": [float(x) for x in cam.up],
+            }
+        except Exception:
+            camera = None
+
+        return {
+            "format": self.SCENE_FORMAT,
+            "version": self.SCENE_VERSION,
+            "shell_backface_cull": bool(self._cull_backfaces),
+            "templates": [
+                {
+                    "id": shell.id,
+                    "opacity": float(shell.opacity),
+                    "visible": bool(shell.visible),
+                }
+                for shell in self.template_shells.values()
+            ],
+            "layers": [
+                {
+                    "atlas_id": layer.atlas_id,
+                    "label_index": int(layer.label_index),
+                    "label_name": layer.label_name,
+                    "color": [float(c) for c in layer.color],
+                    "opacity": float(layer.opacity),
+                    "show_label": bool(layer.show_label),
+                    "visible": bool(layer.visible),
+                }
+                for layer in self.layers.values()
+            ],
+            "camera": camera,
+        }
+
+    def save_scene(self, path: str | Path) -> Path:
+        path = Path(path)
+        path.write_text(json.dumps(self.scene_snapshot(), indent=2))
+        return path
+
+    def apply_scene_snapshot(self, data: dict[str, Any]) -> list[str]:
+        """Restore the scene from `data`. Returns a list of non-fatal warnings
+        (e.g. missing atlases or templates that could not be restored)."""
+        fmt = data.get("format")
+        # Accept the legacy "ez_brain_viewer.scene" format string so scenes saved
+        # before the app was renamed continue to load cleanly.
+        if fmt not in (self.SCENE_FORMAT, "ez_brain_viewer.scene"):
+            raise ValueError(f"Not an ezbv scene file (format={fmt!r}).")
+        version = int(data.get("version", 0))
+        if version > self.SCENE_VERSION:
+            raise ValueError(
+                f"Scene version {version} is newer than this app supports "
+                f"({self.SCENE_VERSION}). Upgrade ezbv."
+            )
+
+        warnings: list[str] = []
+
+        # Tear down current state first so failures don't leave a half-merged scene.
+        self.clear_layers()
+        for tid in list(self.template_shells.keys()):
+            self.remove_template(tid)
+
+        self.set_shell_backface_culling(bool(data.get("shell_backface_cull", True)))
+
+        for tpl in data.get("templates", []) or []:
+            tid = tpl.get("id")
+            if not tid:
+                continue
+            try:
+                self.add_template(tid, opacity=float(tpl.get("opacity", config.DEFAULT_TEMPLATE_OPACITY)))
+                if not bool(tpl.get("visible", True)):
+                    self.update_template(tid, visible=False)
+            except Exception as exc:
+                warnings.append(f"Template {tid!r} could not be restored: {exc}")
+
+        for rec in data.get("layers", []) or []:
+            aid = rec.get("atlas_id")
+            idx = rec.get("label_index")
+            if not aid or idx is None:
+                continue
+            color = tuple(rec.get("color", (0.6, 0.6, 0.6)))
+            opacity = float(rec.get("opacity", 1.0))
+            show_label = bool(rec.get("show_label", False))
+            visible = bool(rec.get("visible", True))
+            try:
+                layer_id = self.add_layer(
+                    aid, int(idx), color=color, opacity=opacity, show_label=show_label
+                )
+                if not visible:
+                    self.update_layer(layer_id, visible=False)
+            except Exception as exc:
+                name = rec.get("label_name") or f"label {idx}"
+                warnings.append(f"Layer {name!r} in atlas {aid!r} could not be restored: {exc}")
+
+        cam_state = data.get("camera")
+        if isinstance(cam_state, dict):
+            try:
+                cam = self.plotter.camera
+                cam.position = tuple(float(x) for x in cam_state["position"])
+                cam.focal_point = tuple(float(x) for x in cam_state["focal_point"])
+                cam.up = tuple(float(x) for x in cam_state["view_up"])
+                try:
+                    self.plotter.reset_camera_clipping_range()
+                except Exception:
+                    pass
+                self._render()
+            except Exception as exc:
+                warnings.append(f"Camera could not be restored: {exc}")
+
+        return warnings
+
+    def load_scene(self, path: str | Path) -> list[str]:
+        path = Path(path)
+        data = json.loads(path.read_text())
+        return self.apply_scene_snapshot(data)
+
     # -- Export --------------------------------------------------------------
 
-    def export_png(
-        self,
-        path: str | Path,
-        width_px: int,
-        dpi: int = 300,
-        transparent: bool = True,
-        height_px: int | None = None,
-    ) -> Path:
-        """Render the current scene into a fresh off-screen plotter, then save PNG.
+    def _build_offscreen_plotter(self, target_w: int, target_h: int) -> pv.Plotter:
+        """Create an off-screen plotter mirroring the current scene (shells + layers + labels).
 
-        The live plotter is never resized. DPI is written as PNG metadata only.
+        Camera is copied from the live plotter so the export matches what the user sees.
         """
-        path = Path(path)
-        base_w, base_h = config.EXPORT_BASE_SIZE
-        target_w = int(width_px)
-        target_h = int(height_px) if height_px else int(round(base_h * (target_w / base_w)))
+        base_w, _ = config.EXPORT_BASE_SIZE
 
-        # Render at target pixel size directly. `screenshot(scale=N)` does not
-        # scale 2D overlays (labels, axes) reliably, so we avoid it.
         off = pv.Plotter(off_screen=True, window_size=(target_w, target_h))
         off.set_background("white")
         try:
@@ -322,7 +436,6 @@ class SceneManager:
             except Exception:
                 pass
 
-        # Scale font size with target width so labels stay legible at all sizes.
         font_px = max(14, int(round(28 * target_w / base_w)))
 
         for layer in self.layers.values():
@@ -349,12 +462,125 @@ class SceneManager:
                 )
 
         off.camera_position = self.plotter.camera_position
+        return off
 
+    def export_png(
+        self,
+        path: str | Path,
+        width_px: int,
+        dpi: int = 300,
+        transparent: bool = True,
+        height_px: int | None = None,
+    ) -> Path:
+        """Render the current scene into a fresh off-screen plotter, then save PNG.
+
+        The live plotter is never resized. DPI is written as PNG metadata only.
+        """
+        path = Path(path)
+        base_w, base_h = config.EXPORT_BASE_SIZE
+        target_w = int(width_px)
+        target_h = int(height_px) if height_px else int(round(base_h * (target_w / base_w)))
+
+        # Render at target pixel size directly. `screenshot(scale=N)` does not
+        # scale 2D overlays (labels, axes) reliably, so we avoid it.
+        off = self._build_offscreen_plotter(target_w, target_h)
         arr = off.screenshot(transparent_background=transparent, return_img=True)
         off.close()
 
         mode = "RGBA" if arr.shape[2] == 4 else "RGB"
         Image.fromarray(arr, mode=mode).save(str(path), dpi=(dpi, dpi))
+        return path
+
+    def export_gif(
+        self,
+        path: str | Path,
+        width_px: int,
+        rotation_axis: Literal["vertical", "horizontal", "roll"] = "vertical",
+        rotation_deg: float = 360.0,
+        n_frames: int = 36,
+        cycle_duration_s: float = 3.0,
+        loop: bool = True,
+        height_px: int | None = None,
+    ) -> Path:
+        """Render a rotating-camera animation to an animated GIF.
+
+        rotation_axis:
+          - "vertical"   → camera azimuth around the scene's up axis (classic spin)
+          - "horizontal" → camera elevation (pitches up/down)
+          - "roll"       → rolls around the line-of-sight
+        rotation_deg: total sweep angle across the whole clip (360° = seamless loop).
+        n_frames: number of captured frames; angular step = rotation_deg / n_frames.
+        cycle_duration_s: total playback length of one full sweep. Per-frame duration
+            derives from this (`1000 * cycle_duration_s / n_frames` ms).
+
+        Frames are always rendered on solid white — GIF supports only 1-bit
+        palette transparency, which bleeds through any semi-transparent shell or
+        layer and produces a tinted mess. For alpha-correct output, use PNG.
+        """
+        if n_frames < 2:
+            raise ValueError("n_frames must be >= 2")
+        if cycle_duration_s <= 0.0:
+            raise ValueError("cycle_duration_s must be > 0")
+        if rotation_axis not in ("vertical", "horizontal", "roll"):
+            raise ValueError(f"unknown rotation_axis: {rotation_axis!r}")
+
+        path = Path(path)
+        base_w, base_h = config.EXPORT_BASE_SIZE
+        target_w = int(width_px)
+        target_h = int(height_px) if height_px else int(round(base_h * (target_w / base_w)))
+
+        off = self._build_offscreen_plotter(target_w, target_h)
+
+        # VTK camera rotations are applied *incrementally* to the current orientation,
+        # so we build frames by nudging the camera by a constant delta each step.
+        # Use the PascalCase vtkCamera methods (inherited by pyvista.Camera) because
+        # pyvista's lowercase `azimuth`/`elevation`/`roll` are *properties* in recent
+        # releases, not callable methods.
+        step_deg = float(rotation_deg) / float(n_frames)
+        vtk_cam = off.camera
+        rotate = {
+            "vertical":   vtk_cam.Azimuth,
+            "horizontal": vtk_cam.Elevation,
+            "roll":       vtk_cam.Roll,
+        }[rotation_axis]
+
+        # GIFs only support 1-bit palette transparency, so semi-transparent
+        # shells/layers can't be encoded honestly — any backdrop color would
+        # bleed through. Always render on solid white; the `transparent`
+        # parameter is ignored for GIF exports.
+        frames_rgb: list[Image.Image] = []
+        try:
+            for i in range(n_frames):
+                if i > 0:
+                    rotate(step_deg)
+                    # Force a fresh render so the rotated camera state is reflected
+                    # in the next screenshot — pyvista doesn't always flush dirty
+                    # vtkCamera state between consecutive screenshot calls.
+                    try:
+                        off.render()
+                    except Exception:
+                        pass
+                arr = off.screenshot(transparent_background=False, return_img=True)
+                img = Image.fromarray(arr, mode="RGBA" if arr.shape[2] == 4 else "RGB").convert("RGB")
+                frames_rgb.append(img)
+        finally:
+            off.close()
+
+        # Quantize each frame independently so palettes stay local to the frame.
+        p_frames = [
+            f.convert("P", palette=Image.Palette.ADAPTIVE, colors=256) for f in frames_rgb
+        ]
+        duration_ms = max(20, int(round(1000.0 * float(cycle_duration_s) / float(n_frames))))
+        p_frames[0].save(
+            str(path),
+            format="GIF",
+            save_all=True,
+            append_images=p_frames[1:],
+            duration=duration_ms,
+            loop=0 if loop else 1,
+            disposal=2,
+            optimize=False,
+        )
         return path
 
     # -- Internals -----------------------------------------------------------

@@ -8,6 +8,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import config
 from ..atlases import AtlasRegistry
+from ..icons import get_app_icon
 from ..scene import SceneManager
 from ..templates import TemplateRegistry
 from .. import custom_atlases
@@ -176,7 +177,7 @@ class ControlPanel(QtWidgets.QWidget):
     def _build_export_group(self) -> QtWidgets.QGroupBox:
         box = QtWidgets.QGroupBox("Export")
         v = QtWidgets.QVBoxLayout(box)
-        btn = QtWidgets.QPushButton("Export PNG…")
+        btn = QtWidgets.QPushButton("Export figure…")
         btn.clicked.connect(self._open_export_dialog)
         v.addWidget(btn)
         return box
@@ -403,12 +404,123 @@ class ControlPanel(QtWidgets.QWidget):
             settings = dialog.settings()
             self._run_export(settings)
 
+    # ---- Scene save / load --------------------------------------------------
+
+    def _reapply_window_icon(self) -> None:
+        """Some Linux Qt platforms (xdg-desktop-portal paths) drop the window
+        icon after a modal QFileDialog closes — re-set it to be safe."""
+        window = self.window()
+        if window is None:
+            return
+        icon = get_app_icon()
+        window.setWindowIcon(icon)
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.setWindowIcon(icon)
+
+    def save_scene_to_file(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save scene",
+            str(Path.home() / "scene.ezbv.json"),
+            "ezbv scene (*.ezbv.json *.json)",
+        )
+        self._reapply_window_icon()
+        if not path:
+            return
+        if not path.lower().endswith((".json", ".ezbv.json")):
+            path += ".ezbv.json"
+        try:
+            saved = self.scene.save_scene(path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Save failed", str(exc))
+            return
+        QtWidgets.QMessageBox.information(
+            self, "Scene saved", f"Wrote:\n{saved}"
+        )
+
+    def open_scene_from_file(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Open scene",
+            str(Path.home()),
+            "ezbv scene (*.ezbv.json *.json);;All files (*)",
+        )
+        self._reapply_window_icon()
+        if not path:
+            return
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        try:
+            warnings = self.scene.load_scene(path)
+        except Exception as exc:
+            QtWidgets.QApplication.restoreOverrideCursor()
+            QtWidgets.QMessageBox.critical(self, "Open failed", str(exc))
+            return
+        QtWidgets.QApplication.restoreOverrideCursor()
+
+        self._rebuild_rows_from_scene()
+
+        if warnings:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Scene loaded with warnings",
+                "Some items could not be restored:\n\n" + "\n".join(warnings),
+            )
+
+    def _rebuild_rows_from_scene(self) -> None:
+        """Tear down and re-create left-panel rows to match current scene state."""
+        # Clear template rows.
+        for tid in list(self._template_rows.keys()):
+            row = self._template_rows.pop(tid)
+            row.setParent(None)
+            row.deleteLater()
+        # Clear layer rows.
+        for lid in list(self._layer_rows.keys()):
+            row = self._layer_rows.pop(lid)
+            row.setParent(None)
+            row.deleteLater()
+
+        # Sync cull-backfaces checkbox (without re-triggering the scene handler).
+        self.cull_backfaces_check.blockSignals(True)
+        self.cull_backfaces_check.setChecked(bool(self.scene._cull_backfaces))
+        self.cull_backfaces_check.blockSignals(False)
+
+        # Rebuild template rows from scene state.
+        for tid, shell in self.scene.template_shells.items():
+            self._add_template_row(tid, shell.name, shell.opacity, shell.visible)
+
+        # Rebuild layer rows from scene state.
+        for lid, layer in self.scene.layers.items():
+            self._add_layer_row(
+                lid, layer.label_name, layer.color, layer.opacity, layer.show_label
+            )
+            if not layer.visible:
+                # Reflect hidden state in the row without re-triggering scene.update_layer.
+                row = self._layer_rows[lid]
+                row.visible_checkbox.blockSignals(True)
+                row.visible_checkbox.setChecked(False)
+                row.name_label.setEnabled(False)
+                row.swatch.setEnabled(False)
+                row.opacity_slider.setEnabled(False)
+                row.label_checkbox.setEnabled(False)
+                row.visible_checkbox.blockSignals(False)
+
     def _run_export(self, s: ExportSettings) -> None:
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
-            path = self.scene.export_png(
-                s.path, width_px=s.width_px, dpi=s.dpi, transparent=s.transparent
-            )
+            if s.format == "gif":
+                path = self.scene.export_gif(
+                    s.path,
+                    width_px=s.width_px,
+                    rotation_axis=s.rotation_axis,
+                    rotation_deg=s.rotation_deg,
+                    n_frames=s.n_frames,
+                    cycle_duration_s=s.cycle_duration_s,
+                )
+            else:
+                path = self.scene.export_png(
+                    s.path, width_px=s.width_px, dpi=s.dpi, transparent=s.transparent
+                )
         except Exception as exc:
             QtWidgets.QApplication.restoreOverrideCursor()
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
